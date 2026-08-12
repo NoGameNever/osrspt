@@ -170,6 +170,95 @@ async function run() {
     bad('MongoDB connected', `status=${dbStatus()}`);
   }
 
+  console.log('\nGrand Exchange prices');
+  {
+    const prices = require('../src/services/prices');
+
+    // Tax maths is pure and must match the Wiki's own worked examples:
+    // 2%, rounded down, nothing under 50 gp, capped at 5m per item.
+    const taxCases = [
+      [49, 0],
+      [50, 1],
+      [99, 1],
+      [100, 2],
+      [1000, 20],
+      [1_000_000_000, 5_000_000],
+    ];
+    const taxBad = taxCases.filter(([input, want]) => prices.geTax(input) !== want);
+    if (taxBad.length === 0) ok('GE tax maths matches the Wiki (2%, floor, 5m cap, free under 50)');
+    else bad('GE tax maths', JSON.stringify(taxBad));
+
+    const whip = await expectStatus(
+      'price lookup by name',
+      req('/api/prices/item?name=abyssal%20whip'),
+      200
+    );
+    if (whip && whip.id === 4151 && whip.name === 'Abyssal whip') {
+      ok('resolved shorthand to the right item', `id ${whip.id}`);
+    } else {
+      bad('resolved shorthand to the right item', JSON.stringify(whip).slice(0, 120));
+    }
+    if (whip && whip.price && Number.isFinite(whip.price.instaBuy) && whip.price.instaBuy > 0) {
+      ok('live price returned', `${whip.price.instaBuy.toLocaleString()} gp`);
+    } else {
+      bad('live price returned', JSON.stringify(whip && whip.price));
+    }
+    if (whip && whip.margin && whip.margin.geTaxPerItem === prices.geTax(whip.price.instaBuy)) {
+      ok('margin subtracts the same tax the helper computes');
+    } else {
+      bad('margin tax consistency', JSON.stringify(whip && whip.margin));
+    }
+
+    // Aliases and possessives were both wrong in early drafts.
+    const alias = await expectStatus('shorthand alias resolves', req('/api/prices/item?name=tbow'), 200);
+    if (alias && alias.name === 'Twisted bow') ok('"tbow" resolves to Twisted bow');
+    else bad('"tbow" resolves to Twisted bow', alias && alias.name);
+
+    const poss = await expectStatus(
+      'possessive item name resolves',
+      req('/api/prices/item?name=zulrah%20scale'),
+      200
+    );
+    if (poss && poss.name === "Zulrah's scales") ok('"zulrah scale" resolves to Zulrah\'s scales');
+    else bad('possessive resolution', poss && poss.name);
+
+    const dose = await expectStatus(
+      'dose defaulting',
+      req('/api/prices/item?name=saradomin%20brew'),
+      200
+    );
+    if (dose && dose.name === 'Saradomin brew(4)') ok('undosed potion query defaults to (4)');
+    else bad('dose defaulting', dose && dose.name);
+
+    await expectStatus('unknown item is a 404', req('/api/prices/item?name=zzzznotanitem'), 404);
+    await expectStatus('missing name is rejected', req('/api/prices/item'), 400);
+
+    const search = await expectStatus('item search works', req('/api/prices/search?q=dragon'), 200);
+    if (search && Array.isArray(search.matches) && search.matches.length > 1) {
+      ok('search returns candidates', `${search.matches.length} matches`);
+    } else {
+      bad('search returns candidates', JSON.stringify(search).slice(0, 120));
+    }
+
+    const bulk = await expectStatus(
+      'bulk pricing works',
+      post('/api/prices/bulk', { items: ['twisted bow', 'scythe of vitur'] }),
+      200
+    );
+    if (bulk && bulk.results && bulk.results.length === 2 && bulk.results.every((r) => r.id)) {
+      ok('bulk returned both items');
+    } else {
+      bad('bulk returned both items', JSON.stringify(bulk).slice(0, 120));
+    }
+
+    await expectStatus('bulk rejects an empty list', post('/api/prices/bulk', { items: [] }), 400);
+    await expectStatus(
+      'bulk rejects oversized batches',
+      post('/api/prices/bulk', { items: Array(20).fill('shark') }),
+      400
+    );
+  }
+
   console.log('\nChat + OpenAI');
   const sessionId = 'smoke-' + Date.now();
   if (!config.openaiApiKey) {
@@ -183,6 +272,7 @@ async function run() {
     }
     skipped('chat completion succeeds', 'OPENAI_API_KEY not set');
     skipped('conversation persisted', 'requires a successful chat');
+    skipped('model called get_item_prices', 'OPENAI_API_KEY not set');
   } else {
     const body = await expectStatus(
       'chat completion succeeds',
@@ -190,6 +280,21 @@ async function run() {
       200
     );
     if (body && body.reply) ok('assistant reply received', `${body.reply.slice(0, 60)}…`);
+
+    // A price question must go through the tool, not the model's memory.
+    const priced = await expectStatus(
+      'price question triggers a tool call',
+      post('/api/chat', {
+        sessionId: sessionId + '-price',
+        message: 'What does an abyssal whip cost right now?',
+      }),
+      200
+    );
+    if (priced && Array.isArray(priced.toolsUsed) && priced.toolsUsed.includes('get_item_prices')) {
+      ok('model called get_item_prices instead of guessing');
+    } else {
+      bad('model called get_item_prices', JSON.stringify(priced && priced.toolsUsed));
+    }
 
     const replay = await expectStatus(
       'conversation history replays',

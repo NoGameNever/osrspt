@@ -10,6 +10,8 @@ Unofficial fan project. Not affiliated with Jagex.
 
 - Chat interface backed by the OpenAI API, called **only** from the server.
 - Public OSRS hiscores lookup, gated behind explicit user permission.
+- **Live Grand Exchange prices** from the OSRS Wiki real-time price API, exposed to the model as
+  a tool so it looks prices up instead of recalling stale ones.
 - Conversation history persisted to MongoDB Atlas, keyed by session id.
 - Three response styles (Concise, Gear & Setups, Deep Dive) and four gear tiers
   (Budget, Mid-game, Near-BiS, BiS) passed into the server-side prompt.
@@ -49,6 +51,7 @@ cp .env.example .env   # then fill in real values
 | `PORT` | no | Local port, default `3000`. On Render this is injected — do not set it. |
 | `HISTORY_LIMIT` | no | Prior messages replayed into the model. Default `20`. |
 | `CORS_ORIGINS` | no | Comma-separated origin allow-list. Leave empty when the frontend is same-origin (the default). |
+| `PRICES_USER_AGENT` | no | User-Agent sent to the OSRS Wiki price API. A sensible default is set; override it to identify your own deployment. |
 
 `.env` is gitignored and must never be committed. Only `.env.example` is tracked.
 
@@ -153,6 +156,37 @@ permission check runs before any validation or network access. `mode` is one of 
 
 Returns the cached snapshot only. Never triggers a lookup.
 
+### `GET /api/prices/item?name=<item>`
+
+Current Grand Exchange data for one item. Accepts exact names, an item id, common shorthand
+(`tbow`, `bcp`, `whip`), possessives (`zulrah scale`) and undosed potion names (`saradomin brew`
+resolves to the 4-dose).
+
+```json
+{
+  "id": 20997,
+  "name": "Twisted bow",
+  "buyLimit": 8,
+  "highAlch": 2400000,
+  "price": { "instaBuy": 1289000000, "instaSell": 1280808641, "instaBuyAge": "45s ago" },
+  "margin": { "grossPerItem": 8191359, "geTaxPerItem": 5000000, "netPerItem": 3191359 },
+  "last24h": { "avgHigh": 1343776076, "avgLow": 1339541266, "volume": 392 },
+  "stale": false
+}
+```
+
+### `GET /api/prices/search?q=<text>`
+
+Candidate item names, for disambiguating a vague query.
+
+### `POST /api/prices/bulk`
+
+```json
+{ "items": ["twisted bow", "scythe of vitur"] }
+```
+
+Up to 12 items. Individual failures are reported per item rather than failing the batch.
+
 All errors use a single shape and never include stack traces, credentials or connection strings:
 
 ```json
@@ -178,9 +212,12 @@ osrspt/
     routes/
       chat.js             POST /api/chat, GET /api/chat/:sessionId
       player.js           POST /api/player/lookup, GET /api/player/:rsn
+      prices.js           GET /api/prices/item, /search, POST /bulk
     services/
-      openai.js           OpenAI client + safe error mapping
+      openai.js           OpenAI client, tool-calling loop, safe error mapping
       osrs.js             ALL external hiscores access lives here
+      prices.js           ALL external GE price access lives here
+      tools.js            tool definitions + handlers the model may call
       prompt.js           server-side assistant instructions
     models/
       Conversation.js
@@ -252,9 +289,42 @@ outbound IPs, allow-list those addresses instead. Use a dedicated database user 
 
 Free Render instances sleep when idle, so the first request after a pause can take ~30 seconds.
 
+## Grand Exchange prices
+
+Prices come from the [OSRS Wiki real-time price API](https://oldschool.runescape.wiki/w/RuneScape:Real-time_Prices).
+All access is isolated in `src/services/prices.js`.
+
+**The model is never asked to recall a price.** `src/services/tools.js` exposes `get_item_prices`
+and `search_items` as OpenAI tools, and the system prompt requires a tool call before any GP
+figure is stated. If the lookup fails, the assistant is instructed to say so rather than
+substitute a remembered number. Chat responses include a `toolsUsed` array, and the frontend
+labels any answer whose prices came from a live lookup.
+
+### Caching and etiquette
+
+The Wiki serves these as bulk documents, so we fetch each whole and cache it in memory rather
+than making one request per item:
+
+| Data | Endpoint | Size | Cache |
+| --- | --- | --- | --- |
+| Item mapping | `/mapping` | ~860 kB | 24 hours (warmed at boot) |
+| Latest prices | `/latest` | ~340 kB | 60 seconds |
+| 24-hour averages | `/24h` | ~380 kB | 30 minutes |
+
+Concurrent refreshes of the same endpoint are de-duplicated, and if a refresh fails while an
+older copy is cached, the stale copy is served instead of failing the request. The Wiki asks
+consumers to send a descriptive `User-Agent`; ours is set in `prices.js` and overridable with
+`PRICES_USER_AGENT`.
+
+### Grand Exchange tax
+
+The tax is **2% of the sale price, rounded down, capped at 5,000,000 gp per item**, and is not
+charged below 50 gp. It was introduced at 1% on 9 December 2021 and raised to 2% on
+29 May 2025 — figures from before that date are wrong. A small set of items is exempt; that
+list changes with game updates and is **not** modelled here, which the API response notes.
+
 ## Roadmap
 
-- Live Grand Exchange prices via the OSRS Wiki real-time price API.
 - A structured gear database so tier recommendations are data-driven rather than model-generated.
 - Retrieval over OSRS Wiki content for citable, current mechanics.
 - Per-user accounts and multi-conversation history.

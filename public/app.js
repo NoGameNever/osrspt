@@ -138,13 +138,23 @@
       .replace(/(^|[\s(])\*([^*]+)\*/g, '$1<em>$2</em>');
   }
 
-  function addMessage(role, text) {
+  function addMessage(role, text, meta) {
     var wrap = document.createElement('div');
     wrap.className = 'msg ' + role;
     var bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.innerHTML = renderText(text);
     wrap.appendChild(bubble);
+
+    // Make it visible when GP figures came from a live lookup rather than
+    // from the model's own (stale) knowledge.
+    if (meta && meta.livePrices) {
+      var tag = document.createElement('div');
+      tag.className = 'msg-source';
+      tag.textContent = 'Prices from the OSRS Wiki live Grand Exchange data';
+      wrap.appendChild(tag);
+    }
+
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
     return bubble;
@@ -369,7 +379,10 @@
         }),
       });
 
-      addMessage('assistant', data.reply);
+      addMessage('assistant', data.reply, {
+        livePrices:
+          Array.isArray(data.toolsUsed) && data.toolsUsed.indexOf('get_item_prices') !== -1,
+      });
 
       // If the server says we have an RSN but no permission, surface the gate.
       if (data.needsPermission && rsn) askPermission(rsn);

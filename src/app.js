@@ -13,6 +13,7 @@ const { notFound, errorHandler } = require('./middleware/errors');
 
 const chatRouter = require('./routes/chat');
 const playerRouter = require('./routes/player');
+const pricesRouter = require('./routes/prices');
 
 function createApp() {
   const app = express();
@@ -91,10 +92,23 @@ function createApp() {
     },
   });
 
+  // Price data is served from an in-memory cache, so it is cheap for us but
+  // still worth bounding.
+  const pricesLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 40,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: {
+      error: { code: 'RATE_LIMITED', message: 'Too many price lookups. Wait a moment.' },
+    },
+  });
+
   app.use('/api', apiLimiter);
   app.use('/api/chat', chatLimiter, chatRouter);
   app.use('/api/player/lookup', lookupLimiter);
   app.use('/api/player', playerRouter);
+  app.use('/api/prices', pricesLimiter, pricesRouter);
 
   // --- Static frontend ---
   app.use(

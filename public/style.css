@@ -282,11 +282,23 @@ textarea {
 }
 
 .msg {
+  /* Column so an optional source tag can sit beneath the bubble rather than
+     beside it. Alignment (not justification) controls which side it hugs. */
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .msg.user {
-  justify-content: flex-end;
+  align-items: flex-end;
+}
+
+.msg-source {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 4px;
+  letter-spacing: 0.01em;
 }
 
 .bubble {

@@ -3,6 +3,7 @@
 const { config, checkEnv } = require('./config');
 const { connectDb, disconnectDb } = require('./db');
 const { createApp } = require('./app');
+const prices = require('./services/prices');
 
 async function main() {
   const missing = checkEnv();
@@ -22,6 +23,11 @@ async function main() {
   const server = app.listen(config.port, '0.0.0.0', () => {
     console.log(`[startup] OSRSpt listening on port ${config.port} (${config.env})`);
   });
+
+  // Pull the ~860 kB GE item mapping in the background so the first price
+  // question does not pay for it. Failure here is non-fatal; the cache will
+  // fill on demand instead.
+  prices.warmUp();
 
   const shutdown = async (signal) => {
     console.log(`[shutdown] received ${signal}`);

@@ -112,7 +112,7 @@ router.post('/', async (req, res, next) => {
       .map((m) => ({ role: m.role, content: m.content }));
 
     // 4. Call the model (server-side only).
-    const { reply, model, usage } = await ai.createChatCompletion({
+    const { reply, model, usage, toolsUsed } = await ai.createChatCompletion({
       systemPrompt,
       messages: [...history, { role: 'user', content: message }],
     });
@@ -146,6 +146,9 @@ router.post('/', async (req, res, next) => {
       gearTier,
       model,
       usage,
+      // Surfaced so the client can show that prices came from live data
+      // rather than from the model's memory.
+      toolsUsed: toolsUsed || [],
       persisted,
       messageCount: convo.messages.length,
     });

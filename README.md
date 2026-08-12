@@ -32,7 +32,7 @@ client, local files, or login details. The assistant prompt enforces this and fo
 ## Installation
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/NoGameNever/osrspt.git
 cd osrspt
 npm install
 cp .env.example .env   # then fill in real values

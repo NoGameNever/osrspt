@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OSRSpt — Old School RuneScape Assistant</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="brand">
+          <h1>OSRSpt</h1>
+          <p class="tagline">Old School RuneScape research assistant</p>
+        </div>
+        <div class="status" id="serverStatus" aria-live="polite">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">checking…</span>
+        </div>
+      </header>
+
+      <section class="panel account">
+        <div class="field">
+          <label for="rsnInput">RuneScape Name (RSN)</label>
+          <input
+            id="rsnInput"
+            type="text"
+            maxlength="12"
+            placeholder="e.g. Zezima"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <div class="field narrow">
+          <label for="modeSelect">Account type</label>
+          <select id="modeSelect">
+            <option value="main">Main</option>
+            <option value="ironman">Ironman</option>
+            <option value="hardcore">Hardcore Ironman</option>
+            <option value="ultimate">Ultimate Ironman</option>
+          </select>
+        </div>
+
+        <div class="field narrow">
+          <label for="styleSelect">Response style</label>
+          <select id="styleSelect">
+            <option value="concise">Concise</option>
+            <option value="gear">Gear &amp; Setups</option>
+            <option value="deep">Deep Dive</option>
+          </select>
+        </div>
+
+        <div class="field narrow">
+          <label for="tierSelect">Gear tier</label>
+          <select id="tierSelect">
+            <option value="">Any</option>
+            <option value="budget">Budget</option>
+            <option value="mid-game">Mid-game</option>
+            <option value="near-bis">Near-BiS</option>
+            <option value="bis">BiS</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Permission gate: only ever shown when a lookup is proposed -->
+      <section class="panel permission" id="permissionPanel" hidden>
+        <div class="permission-body">
+          <strong>Permission needed</strong>
+          <p id="permissionText">May I look up the public OSRS hiscores for this RSN?</p>
+          <p class="permission-note">
+            This reads only publicly published ranks, levels, XP and boss scores. It cannot see your
+            bank, inventory, quests, collection log, RuneLite client, or login details.
+          </p>
+        </div>
+        <div class="permission-actions">
+          <button id="permissionAllow" class="btn primary" type="button">Allow lookup</button>
+          <button id="permissionDeny" class="btn ghost" type="button">Not now</button>
+        </div>
+      </section>
+
+      <section class="panel player-card" id="playerCard" hidden>
+        <div class="player-head">
+          <strong id="playerName">—</strong>
+          <button id="refreshPlayer" class="btn tiny ghost" type="button">Refresh</button>
+        </div>
+        <div class="player-meta" id="playerMeta"></div>
+        <div class="player-skills" id="playerSkills"></div>
+        <p class="fineprint">
+          Public hiscores only. No bank, inventory, quest, diary or collection log data is available.
+        </p>
+      </section>
+
+      <div class="error" id="errorBox" role="alert" hidden></div>
+
+      <main class="chat" id="chat" aria-live="polite">
+        <div class="msg assistant welcome">
+          <div class="bubble">
+            <p>
+              Ask me about gear, bosses, progression, skilling methods or money making in Old School
+              RuneScape.
+            </p>
+            <p>
+              For account-specific advice, enter your RSN above — I'll ask permission before reading
+              your public hiscores.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      <div class="loading" id="loading" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="loadingText">Thinking…</span>
+      </div>
+
+      <form class="composer" id="composer">
+        <textarea
+          id="messageInput"
+          rows="2"
+          maxlength="2000"
+          placeholder="What boss should I learn next?"
+          required
+        ></textarea>
+        <div class="composer-side">
+          <button class="btn primary" id="sendBtn" type="submit">Send</button>
+          <button class="btn ghost tiny" id="newChatBtn" type="button">New chat</button>
+          <span class="counter" id="charCount">0 / 2000</span>
+        </div>
+      </form>
+
+      <footer class="footer">
+        <p>
+          Unofficial fan project. Not affiliated with Jagex. Verify time-sensitive details on the
+          <a href="https://oldschool.runescape.wiki" target="_blank" rel="noopener noreferrer"
+            >OSRS Wiki</a
+          >.
+        </p>
+      </footer>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

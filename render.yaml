@@ -1,0 +1,19 @@
+# Render blueprint. Secrets are marked sync:false so they are entered in the
+# Render dashboard and never committed to Git.
+services:
+  - type: web
+    name: osrspt
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: MONGODB_URI
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
